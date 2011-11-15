@@ -277,18 +277,9 @@ try {
     ];
 
     var run_tests = (function () {
-        var stable_count = [];
-
         var display = {};
         display.__proto__ = (document || console);
         display.show = (document && document.write) || console.log;
-
-        function flush_stable_count() {
-            if (stable_count.length > 0) {
-                console.log(stable_count.join(''));
-                stable_count = [];
-            }
-        }
 
         function show_result(result, start) {
             if (result.status === 'solved' || (!result.space.failed && result.space.brancher.queue.length === 0)) {
@@ -307,15 +298,19 @@ try {
                     var start = Date.now();
                     var state = {space: S};
                     var count = 0;
+                    
                     display.show('<p><b>' + script.name + ':</b> ' + script.description + '</p>');
+                    
                     do {
                         state = FD.search.depth_first(state);
                         count += show_result(state, start);
                     } while (state.more);
-            if (count === 0) {
-                display.show('<p><tt>No solution</tt></p>');
-            }
-            display.show('<hr/>');
+
+                    if (count === 0) {
+                        display.show('<p><tt>No solution</tt></p>');
+                    }
+        
+                    display.show('<hr/>');
                 }
             });
         };
