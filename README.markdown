@@ -17,13 +17,13 @@ simple puzzles.
 
 All source code part of the `fd.js` project is licensed under the permissive [New BSD license].
 
-## API
+# API
 
-### FD
+## FD
 
 This is the top level "module" that you get when you load fd.js.
 
-### FD.space 
+## FD.space 
 
 "Computation space" class holding variables and propagators.  You create a new
 "computation space" by doing -
@@ -66,10 +66,13 @@ Returns S.
 ##### S.temp(dom?) and S.temps(N, dom?)
 
 Creates new temporary or intermediate fd variables whose names you don't want
-to bother with. Returns the name of the temporary variable.  ##### S.const(n)
-Shorthand for S.temp([[n, n]])
+to bother with. Returns the name of the temporary variable.  
 
-### Propagators
+##### S.const(n)
+
+Currently shorthand for `S.temp([[n, n]])`. Might be optimized in the future.
+
+## Propagators
 
 Propagators are provided as method invocations on a space and all such calls
 return the space itself as the result so that further method invocations can be
@@ -164,7 +167,7 @@ of the space on which the method was invoked. This lets us use a convenient
 "functional" syntax. For an example, see the test_send_more_money_fn script in
 tests.js and compare it with the test_send_more_money script.
 
-### FD.distribute 
+## FD.distribute 
 
 A namespace that holds various distribution strategies.
 
@@ -186,42 +189,62 @@ so on.
 Adds branchers that split the domain of the specified fdvar (or variables, if
 an array or an object with fdvars was supplied) into pieces for each branch. A
 variable's domain is first split at the holes and once it has no holes, it is
-split down the middle.  ### FD.search A namespace that holds various search
-strategies.
+split down the middle.  
+
+## FD.search 
+
+A namespace that holds various search strategies.
 
 ##### FD.search.depth_first(state)
 
-Implements the "depth first" search strategy. state is expected to be an object
-whose space property is the starting space for the search. The state object is
-also the return value, but with additional properties filled in. On return, if
-state.status is the string "solved", then state.space is a solution. If there
-may be more solutions, then state.more will be true. No solution space is found
-even after considering branchers, then state.status will be set to "end" upon
-return and state.more will be false. If you want to get all possible solutions,
-then you need to iteratively call depth_first passing the returned state of one
-call as the argument of the next call and collect all the cases where
-state.status is "solved".
+Implements the "depth first" search strategy. `state` is expected to be an
+object whose `space` property is the starting space for the search. The state
+object is also the return value, but with additional properties filled in. On
+return, if `state.status` is the string `"solved"`, then `state.space` is a
+solution. If there may be more solutions, then `state.more` will be `true`. If
+no solution space is found even after considering branchers, then
+`state.status` will be set to `"end"` upon return and state.more will be
+`false`. If you want to get all possible solutions, then you need to
+iteratively call `depth_first` passing the returned state of one call as the
+argument of the next call and collect all the cases where `state.status` is
+`"solved"`.
 
 ##### FD.search.branch_and_bound(state, ordering)
 
-Finds the "best" solution according to the given ordering function. The `state` parameter is similar to the `depth_first` search function. It is expected to be an object such that `state.space` gives the space from which to search for the best solution.
+Finds the "best" solution according to the given ordering function. The `state`
+parameter is similar to the `depth_first` search function. It is expected to be
+an object such that `state.space` gives the space from which to search for the
+best solution.
 
-The `state` is also what is returned by `branch_and_bound` and `state.space` will be the space with the best solution found during the search. When a solution exists, `state.status` will be the string "solved".
+The `state` is also what is returned by `branch_and_bound` and `state.space`
+will be the space with the best solution found during the search. When a
+solution exists, `state.status` will be the string "solved".
 
 The `ordering` argument is expected to be a function of the form
 
     function (space, a_solution) { ... }
 
-where the `space` argument is the space into which the ordering function should inject the new constraints for the ordering, and `a_solution` is an object whose keys are root finite domain variable names and whose values are the solved values of those variables. The return value of the ordering function is irrelevant.
+where the `space` argument is the space into which the ordering function should
+inject the new constraints for the ordering, and `a_solution` is an object
+whose keys are root finite domain variable names and whose values are the
+solved values of those variables. The return value of the ordering function is
+irrelevant.
 
 There are two ways to use the branch_and_bound function -
 
-In one shot mode where a single call will give you the best solution that it can find, if a solution exists at all.
+In one shot mode where a single call will give you the best solution that it
+can find, if a solution exists at all.
 
-In "single step" mode, indicated by setting `state.single_step` to `true`. In this mode, the function will return whenever it finds a solved space and `state.more` will indicate whether there may be any more solutions to look at. In this mode, every call will result in a solution that is "better" than the one found before it, due to the `ordering` function.
+In "single step" mode, indicated by setting `state.single_step` to `true`. In
+this mode, the function will return whenever it finds a solved space and
+`state.more` will indicate whether there may be any more solutions to look at.
+In this mode, every call will result in a solution that is "better" than the
+one found before it, due to the `ordering` function.
 
-Note that if `state.more` is `false`, then definitely there are no more solutions to look at, but if it is `true`, there *may* be more solutions to look at. If a subsequent search turns up empty, it is indicated by `state.status` being set to the string "end".
-
+Note that if `state.more` is `false`, then definitely there are no more
+solutions to look at, but if it is `true`, there *may* be more solutions to
+look at. If a subsequent search turns up empty, it is indicated by
+`state.status` being set to the string "end".
 
 
 [Mozart/Oz]: http://www.mozart-oz.org/ (The Mozart Programming System)
