@@ -17,7 +17,9 @@ simple puzzles.
 
 All source code part of the `fd.js` project is licensed under the permissive [New BSD license].
 
+------------------------
 # API
+------------------------
 
 ## FD
 
