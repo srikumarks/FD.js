@@ -1965,3 +1965,9 @@ var FD = (function (exports, Math) {
 
     return exports;
 })({}, Math);
+
+try {
+    module.exports = FD;
+} catch (e) {
+    // Not in node.js. Likely loaded as FD in a browser.
+}
