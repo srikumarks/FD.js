@@ -3,23 +3,19 @@ a design based on the CP features of [Mozart/Oz]. In particular, `fd.js` aims to
 separate the concerns of constraint problem specification, branching strategy
 and search strategy through the use of "computation spaces".
 
-## Status
+#### Status
 
 Work *very much* in progress, but the library is already useful enough to solve
 simple puzzles.
 
-## Related links
+#### Related links
 
 * [Mozart/Oz]
 * [Gecode]
 
-## License
+#### License
 
 All source code part of the `fd.js` project is licensed under the permissive [New BSD license].
-
-------------------------
-# API
-------------------------
 
 ## FD
 
