@@ -210,8 +210,8 @@ var FD = (function (exports, Math) {
     // with the parent, but the next_brancher is incremented.
     function Brancher(S, brancher) {
         this.space = S;
-        this.queue = (brancher ? brancher.queue : []);
-        this.next_brancher = (brancher ? (brancher.next_brancher + 1) : 0);
+        this.queue = brancher ? brancher.queue : [];
+        this.next_brancher = brancher ? brancher.next_brancher : 0;
     }
 
     Brancher.prototype = {
@@ -221,8 +221,14 @@ var FD = (function (exports, Math) {
             // due to access via 'this'. However, the queue
             // is an array whose contents are common to all 
             // branchers part of the same tree.
-            var b = this.queue[this.next_brancher];
-            return b ? b.branch.call(this, this.space) : null;
+            var b, ch = null;
+
+            do {
+                b = this.queue[this.next_brancher];
+                ch = b ? b.branch.call(this, this.space) : null;
+            } while (ch === null && this.descend());
+
+            return ch;
         },
 
         enqueue: function (b) {
@@ -232,21 +238,90 @@ var FD = (function (exports, Math) {
             // belonging to each space.
             this.queue.push(b);
             return this;
+        },
+
+        descend: function () {
+            if (this.next_brancher + 1 < this.queue.length) {
+                this.next_brancher++;
+                return true;
+            } else {
+                return false;
+            }
+        },
+
+        descend_and_branch: function () {
+            return this.descend() ? this.branch() : null;
         }
     };
 
+    // Empty propagation step
+    function empty_propagation_step() {
+        return 0;
+    }
+
     // A propagator is solved if all the depvars it affects and
     // depends on have domains of size = 1.
-    function propagator_is_solved(S, p) {
+    function propagator_is_solved(S, p, dont_mark_solved) {
         var i, len, b;
+        
+        if (p.solved) {
+            return true; 
+        }
+
         for (i = 0, len = p.allvars.length; i < len; ++i) {
-            b = S.vars[p.allvars[i]].dom;
-            if (b.length > 0 || b[0][1] > b[0][0]) {
+            if (S.vars[p.allvars[i]].is_undetermined()) {
                 return false;
             }
         }
-        return true;
+
+//        return dont_mark_solved ? true : (p.solved = true);
+        return true;        
     }
+
+    // Some common features for all propagators
+    var Propagator = {
+        save_vars: function (P) {
+            var var_state_stack = P.var_state_stack || (P.var_state_stack = []);
+            var i, N, doms = [], steps = [];
+            for (i = 1, N = P.space.length; i < N; ++i) {
+                doms.push(P.space[i].dom);
+                steps.push(P.space[i].step);
+            }
+            var_state_stack.push([doms, steps, P.last_step]);     
+            P.old_step = P.step;
+        },
+
+        restore_vars: function (P) {
+            var vss = P.var_state_stack.pop();
+            var doms = vss[0], steps = vss[1];
+            var i, N;
+            for (i = 1, N = P.space.length; i < N; ++i) {
+                P.space[i].dom = doms[i - 1];
+                P.space[i].step = steps[i - 1];
+            }
+            P.step = P.old_step;
+            P.last_step = vss[2];
+        },
+
+        discard_saved_vars: function (P) {
+            P.var_state_stack.pop();
+            delete P.old_step;
+        },
+
+        snapshot_vars: function (P) {
+            this.save_vars(P);
+            return P.var_state_stack.pop()[0];
+        },
+
+        complementary_operator: {
+            eq: 'neq',
+            neq: 'eq',
+            lt: 'gte',
+            gt: 'lte',
+            lte: 'gt',
+            gte: 'lt'
+        }
+    };
 
     // Concept of a space that holds fdvars, propagators and branchers.
     function Space(S) {
@@ -296,12 +371,32 @@ var FD = (function (exports, Math) {
             this.brancher = new Brancher(this);
         }
 
+        this.succeeded_children = 0;
+        this.failed_children = 0;
+        this.stable_children = 0;
+
         return this;
     }
 
     // Duplicates the functionality of new Space(S) for readability.
     Space.prototype.clone = function () {
         return new Space(this);
+    };
+
+    // When done with the space, call this to send success results
+    // to the parent space from which it was cloned.
+    Space.prototype.done = function () {
+        if (this.clone_of) {
+            this.clone_of.succeeded_children += this.succeeded_children;
+            this.clone_of.failed_children += this.failed_children;
+            if (this.failed) {
+                this.clone_of.failed_children++;
+            }
+            if (this.succeeded_children === 0 && this.failed_children > 0) {
+                this.failed = true;
+            }
+            this.clone_of.stable_children += this.stable_children;
+        }
     };
 
     // A monotonically increasing class-global counter for unique temporary variable names.
@@ -317,11 +412,24 @@ var FD = (function (exports, Math) {
             }
             totalCount += count;
         } while (count > 0);
+        // console.log(JSON.stringify(this.solution()));
         return totalCount;
     };
 
     // Returns true if this space is solved - i.e. when
     // all the fdvars in the space have a singleton domain.
+    //
+    // This is a *very* strong condition that might not need
+    // to be satisfied for a space to be considered to be
+    // solved. For example, the propagators may determine
+    // ranges for all variables under which all conditions
+    // are met and there would be no further need to enumerate
+    // those solutions.
+    //
+    // For weaker tests, use the solve_for_variables function
+    // to create an appropriate "is_solved" tester and 
+    // set the "state.is_solved" field at search time to
+    // that function.
     Space.prototype.is_solved = function () {
         var i, v;
         for (i in this.vars) {
@@ -360,6 +468,11 @@ var FD = (function (exports, Math) {
         return result;
     };
 
+    // Utility to easily print out the state of variables in the space.
+    Space.prototype.toString = function () {
+        return JSON.stringify(this.solution());
+    };
+
     // Injects the given proc into this space by calling
     // the proc with a single argument which is the current space.
     Space.prototype.inject = function (proc) {
@@ -367,15 +480,19 @@ var FD = (function (exports, Math) {
         return this;
     };
 
-    // Adds the new given propagator to this space and returns the space.
-    Space.prototype.newprop = function (p) {
+    Space.prototype.initprop = function (p) {
         p.last_step = -1;
         p.space = [this];
         var i, len;
         for (i = 0, len = p.allvars.length; i < len; ++i) {
             p.space.push(this.vars[p.allvars[i]]);
         }
-        this._propagators.push(p);
+        return p;
+     };
+
+    // Adds the new given propagator to this space and returns the space.
+    Space.prototype.newprop = function (p) {
+        this._propagators.push(this.initprop(p));
         return this;
     };
 
@@ -402,18 +519,86 @@ var FD = (function (exports, Math) {
         return result;
     };
 
+    // Create a "constant". We have no optimizing support for
+    // constants at the moment and just treat it as a temp FDVar
+    // whose domain is of size = 1.
+    Space.prototype.const = function (val) {
+        if (val < 0 || val > FD_SUP) {
+            throw "FD.space.const: Value out of valid range";
+        }
+
+        return this.temp([[val, val]]);
+    };
+
     function FDVar(dom, step) {
         this.dom = dom || [[0, FD_SUP]];
         this.step = step || 0;
     }
 
     FDVar.prototype = {
+        is_undetermined: function () {
+            return (this.dom.length > 1) || (this.dom[0][0] < this.dom[0][1]);
+        },
+
         set_dom: function (d) {
             if (!domain_equal(this.dom, d)) { 
                 this.dom = d; 
                 this.step++; 
             } 
             return d; 
+        },
+
+        constrain: function (d) {
+            return this.set_dom(domain_non_empty(domain_intersection(this.dom, d)));
+        },
+
+        size: function () {
+            // TODO: Can be cached using the 'step' member which
+            // keeps track of the number of times the domain was
+            // changed.
+            var i, N, s = 0;
+            for (i = 0, N = this.dom.length; i < N; ++i) {
+                s += this.dom[i][1] - this.dom[i][0] + 1;
+            }
+            return s;
+        },
+
+        min: function () {
+            return this.dom[0][0];
+        },
+
+        max: function () {
+            return this.dom[this.dom.length - 1][1];
+        },
+
+        // This "mid" function is quick to calculate and is a useful
+        // compromise if you aren't really interested in the exact 
+        // middle value, but something along the lines of "avoid the
+        // extremes" as best as you can, as fast as you can.
+        rough_mid: function () {
+            var midDomIx = Math.floor(this.dom.length / 2);
+            var midDom = this.dom[midDomIx];
+            return Math.round((midDom[0] + midDom[1]) / 2);
+        },
+
+        // This is true "mid" function that returns the exact middle
+        // value of the domain, but needs to run through the whole domain
+        // to do it. Can be made more efficient, see TODO note below.
+        mid: function () {
+            var size = this.size();
+            var midIx = Math.floor(size / 2);
+            var domIx = 0;
+            var dom = this.dom[domIx];
+
+            // TODO: By right, we should do a binary search here
+            // instead of a linear search. Yes, I'm lazy :P (Kumar)
+            while (midIx > dom[1] - dom[0]) {
+                midIx -= dom[1] - dom[0] + 1;
+                domIx++;
+                dom = this.dom[domIx];
+            }
+
+            return dom[0] + midIx; 
         }
     };
 
@@ -460,6 +645,143 @@ var FD = (function (exports, Math) {
     // that of a single number.
     Space.prototype.num = function(name, n) {
         return this.decl(name, [[n, n]]);
+    };
+
+    // Adds propagators which reify the given operator application
+    // to the given boolean variable.
+    //
+    // `opname` is a string giving the name of the comparison
+    // operator to reify. Currently, 'eq', 'neq', 'lt', 'lte', 'gt' and 'gte'
+    // are supported.
+    //
+    // `argv` is an array of arguments accepted by the given 
+    // comparison operator. Currently this *must* be an array of two
+    // FD variable names.
+    //
+    // `boolname` is the name of the boolean variable to which to
+    // reify the comparison operator. Note that this boolean
+    // variable must already have been declared. If this argument
+    // is omitted from the call, then the `reified` function can
+    // be used in "functional style" and will return the name of
+    // the reified boolean variable which you can pass to other
+    // propagator creator functions.
+    Space.prototype.reified = function (opname, argv, boolname) {
+        var result, positive_propagator, negative_propagator;
+
+        if (opname in Propagator.complementary_operator) {
+            if (boolname) {
+                this.vars[boolname].constrain([[0,1]]);
+                result = this;
+            } else {
+                boolname = this.temp([[0,1]]);
+                result = boolname;
+            }
+
+            console.log('GRAPH: ' + argv[0] + ' ' + opname + ' ' + argv[1] + ' :: ' + boolname);
+
+            this[opname].apply(this, argv);
+            positive_propagator = this._propagators.pop();
+
+            this[Propagator.complementary_operator[opname]].apply(this, argv);
+            negative_propagator = this._propagators.pop();
+
+            var deps = argv.slice(0);
+            deps.push(boolname);
+
+            this.newprop({
+                allvars: deps,
+                depvars: deps,
+                step: function () {
+                    var S = this.space[0], v1 = this.space[1], v2 = this.space[2], b = this.space[3], bdom, snap, i, N, d, k, p, np;
+                    var nextStep = v1.step + v2.step + b.step, f;
+                    if (nextStep > this.last_step) {
+                        // We need to make sure the `last_step` related changes
+                        // are unique to this space, since p and np won't be
+                        // borrowed into cloned spaces, since they aren't in 
+                        // the `S._propagators` array.
+
+                        if (false && this.solved) {
+                            return 0;
+                        }
+
+                        if (!this.p) {                   
+                            this.p = p = S.initprop({
+                                allvars: positive_propagator.allvars, 
+                                depvars: positive_propagator.depvars,
+                                step: positive_propagator.step
+                            });
+                        } else {
+                            p = this.p;
+                        }
+
+                        if (!this.np) {
+                            this.np = np = S.initprop({
+                                allvars: negative_propagator.allvars, 
+                                depvars: negative_propagator.depvars,
+                                step: negative_propagator.step
+                             });
+                        } else {
+                            np = this.np;
+                        }
+
+                        do {
+                            this.last_step = v1.step + v2.step + b.step;
+
+                            bdom = b.dom[0];
+
+                            if (bdom[0] === 1) {
+                                p.step(); // may throw
+                                this.solved = propagator_is_solved(S, p);
+                            }
+
+                            if (bdom[1] === 0) {
+                                // The reified fdvar generates the negative condition.
+                                np.step(); // may throw
+                                this.solved = propagator_is_solved(S, np);
+                            }
+
+                            if (bdom[0] < bdom[1]) {
+                                // The reified fdvar doesn't decide the condition, so
+                                // we now need to check whether the conditions constrain
+                                // the reified fdvar.
+                                Propagator.save_vars(p);
+
+                                try {
+                                    p.step();
+                                    Propagator.restore_vars(p);
+                                } catch (e) {
+                                    Propagator.restore_vars(p);
+                                    b.constrain([[0, 0]]);
+                                }
+
+                                bdom = b.dom[0];
+                            }
+
+                            if (bdom[0] < bdom[1]) {
+                                Propagator.save_vars(np);
+
+                                try {
+                                    np.step();
+                                    Propagator.restore_vars(np);
+                                } catch (e) {
+                                    Propagator.restore_vars(np);
+                                    b.constrain([[1, 1]]);
+                                }
+                            }
+                        } while (v1.step + v2.step + b.step > this.last_step);
+
+                        this.last_step = v1.step + v2.step + b.step;
+                        return this.last_step - nextStep;
+                    } else {
+                        return 0;
+                    }
+                }
+            });
+
+            return result;
+        } else {
+            throw "FD.space.reified: Unsupported operator '" + opname + "'";
+        }
     };
 
     // Domain equality propagator. Creates the propagator
@@ -526,20 +848,29 @@ var FD = (function (exports, Math) {
 
                     if (b2[0] > b1[1]) {
                         // Condition already satisfied. No changes necessary.
+                        // Change the step function to one that does almost no work.
+//                        this.step = empty_propagation_step;
+                        this.solved = true;                        
                         return 0;
                     }
 
                     var count = 0;
 
-                    if (b2[1] - 1 < b1[1]) {
-                        // Need to change domain of v1.
-                        v1.set_dom(domain_non_empty(domain_intersection(v1.dom, [[b1[0], b2[1] - 1]])));
-                    }
+                    do {
+                        this.last_step = v1.step + v2.step;
+                        b1 = domain_bounds(v1.dom);
+                        b2 = domain_bounds(v2.dom);
 
-                    if (b1[0] + 1 > b2[0]) {
-                        // Need to change domain of v2.
-                        v2.set_dom(domain_non_empty(domain_intersection(v2.dom, [[b1[0] + 1, b2[1]]])));
-                    }
+                        if (b2[1] - 1 < b1[1]) {
+                            // Need to change domain of v1.
+                            v1.set_dom(domain_non_empty(domain_intersection(v1.dom, [[b1[0], b2[1] - 1]])));
+                        }
+
+                        if (b1[0] + 1 > b2[0]) {
+                            // Need to change domain of v2.
+                            v2.set_dom(domain_non_empty(domain_intersection(v2.dom, [[b1[0] + 1, b2[1]]])));
+                        }
+                    } while (v1.step + v2.step > this.last_step);
 
                     return (this.last_step = v1.step + v2.step) - nextStep;
                 } else {
@@ -572,20 +903,29 @@ var FD = (function (exports, Math) {
 
                     if (b2[0] >= b1[1]) {
                         // Condition already satisfied. No changes necessary.
+                        // Change the step function to one that does almost no work.
+//                        this.step = empty_propagation_step;
+                        this.solved = true;                        
                         return 0;
                     }
 
                     var count = 0;
 
-                    if (b2[1] < b1[1]) {
-                        // Need to change domain of v1.
-                        v1.set_dom(domain_non_empty(domain_intersection(v1.dom, [[b1[0], b2[1]]])));
-                    }
+                    do {
+                        this.last_step = v1.step + v2.step;
+                        b1 = domain_bounds(v1.dom);
+                        b2 = domain_bounds(v2.dom);
 
-                    if (b1[0] > b2[0]) {
-                        // Need to change domain of v2.
-                        v2.set_dom(domain_non_empty(domain_intersection(v2.dom, [[b1[0], b2[1]]])));
-                    }
+                        if (b2[1] < b1[1]) {
+                            // Need to change domain of v1.
+                            v1.set_dom(domain_non_empty(domain_intersection(v1.dom, [[b1[0], b2[1]]])));
+                        }
+
+                        if (b1[0] > b2[0]) {
+                            // Need to change domain of v2.
+                            v2.set_dom(domain_non_empty(domain_intersection(v2.dom, [[b1[0], b2[1]]])));
+                        }
+                    } while (v1.step + v2.step > this.last_step)
 
                     return (this.last_step = v1.step + v2.step) - nextStep;
                 } else {
@@ -618,25 +958,36 @@ var FD = (function (exports, Math) {
 
                     if (b2[0] > b1[1] || b1[1] < b2[0]) {
                         // Condition already satisfied. No changes necessary.
+                        // Change the step function to one that does almost no work.
+//                        this.step = empty_propagation_step;
+                        this.solved = true;                        
                         return 0;
                     }
 
                     var v12 = domain_intersection(v1.dom, v2.dom);
                     if (v12.length === 0) {
                         // Condition already satisfied.
+                        // Change the step function to one that does almost no work.
+//                        this.step = empty_propagation_step;
+                        this.solved = true;                        
                         return 0;
                     }
 
-                    if (b1[0] === b1[1]) {
-                        v2.set_dom(domain_non_empty(domain_intersection(v2.dom, domain_complement([b1]))));
-                    }
+                    do {
+                        this.last_step = v1.step + v2.step;
+                        b1 = domain_bounds(v1.dom);
+                        b2 = domain_bounds(v2.dom);
 
-                    if (b2[0] === b2[1]) {
-                        v1.set_dom(domain_non_empty(domain_intersection(v1.dom, domain_complement([b2]))));
-                    }
+                        if (b1[0] === b1[1]) {
+                            v2.set_dom(domain_non_empty(domain_intersection(v2.dom, domain_complement([b1]))));
+                        }
+
+                        if (b2[0] === b2[1]) {
+                            v1.set_dom(domain_non_empty(domain_intersection(v1.dom, domain_complement([b2]))));
+                        }
+                    } while (v1.step + v2.step > this.last_step);
 
                     this.last_step = v1.step + v2.step;
-
                     return this.last_step - nextStep;
                 } else {
                     return 0;
@@ -669,6 +1020,8 @@ var FD = (function (exports, Math) {
             sumname = this.temp();
             retval = sumname;
         }
+
+        console.log('GRAPH: ' + v1name + ' + ' + v2name  + ' = ' + sumname);
 
         this.newprop({
             allvars: [v1name, v2name, sumname],
@@ -1011,112 +1364,342 @@ var FD = (function (exports, Math) {
         return simplify_domain(p);
     }
 
-    // Distribution strategies.
-    var Distribute = {
-        naive: function (S, varname) {
-            var i;
+    /////////////////////////////////////////////////////////////////
+    // Modular distribution strategies.
+    var Distribute = {};
 
-            // Handle aggregates in place of varname as well.
-            if (varname instanceof Array || varname instanceof Object) {
-                for (i in varname) {
-                    this.naive(S, varname[i]);
+    // The generic distributor.
+    Distribute.generic = function (S, varnames, spec) {
+       
+        function select_by_order(S, vars, orderingfn) {
+            if (vars.length > 0) {
+                if (vars.length === 1) {
+                    return vars[0];
                 }
-                return S;
+
+                var i, N, first = 0;
+                for (i = 1, N = vars.length; i < N; ++i) {
+                    if (!orderingfn(S, vars[first], vars[i])) {
+                        first = i;
+                    }
+                }
+
+                return vars[first];
+            } else {
+                return null;
+            }
+        }
+
+        var branch_sequence = {};
+        var filterfn = (typeof(spec.filter) === 'string') ? Distribute.generic.filters[spec.filter] : spec.filter;
+        var orderingfn = (typeof(spec.ordering) === 'string') ? Distribute.generic.orderings[spec.ordering] : spec.ordering;
+        var valuefn = (typeof(spec.value) === 'string') ? Distribute.generic.values[spec.value] : spec.value;
+
+        if (!filterfn || !orderingfn || !valuefn) {
+            throw 'FD.distribute.generic: Invalid spec';
+        }
+
+        // The role of the branch() function is to produce a function (S, n)
+        // that will return S with the choice point n committed. The function's
+        // 'numChoices' property will tell you how many choices are available.
+        branch_sequence.branch = function (S) {
+            var vars, v, doms, Sc;
+
+            vars = filterfn(S, varnames);
+            if (vars.length > 0) {
+                v = select_by_order(S, vars, orderingfn);
+
+                return v ? valuefn(v) : null;
+            } else {
+                return null;
+            }
+        };
+
+        S.brancher.enqueue(branch_sequence);
+        return S;
+    };
+
+    Distribute.generic.filters = {
+        undet: function (S, varnames) {
+            var i, N, vs = [];
+            for (i = 0, N = varnames.length; i < N; ++i) {
+                if (S.vars[varnames[i]].is_undetermined()) {
+                    vs.push(varnames[i]);
+                }
             }
 
-            var v = S.vars[varname];
-            var dom = v.dom;
-
-            var branch_sequence = (function () {
-                return {
-                    branch: function (S) {
-                        var state = S.__branch_state || (S.__branch_state = {i: 0, val: dom[0][0]});
-                        if (state.val > dom[state.i][1]) {
-                            state.i++;
-                            if (state.i >= dom.length) {
-                                // No more branch possibilities.
-                                return null;
-                            }
-                            state.val = dom[state.i][0];
-                        }
-
-                        var Sc = S.clone();
-                        var vc = Sc.vars[varname];
-                        vc.set_dom([[state.val, state.val]]);
-                        state.val++;
-                        return Sc;
-                    }
-                };
-            })();
-
-            S.brancher.enqueue(branch_sequence);
-            return S;
-        },
-
-        fail_first: function (S, varnames) {
-
-            function var_with_smallest_domain() {
-                var ds = FD_SUP, v = null;
-                var i, len, b;
-                for (i = 0, len = varnames.length; i < len; ++i) {
-                    b = domain_bounds(S.vars[varnames[i]].dom);
-                    if (b[1] - b[0] <= ds && b[1] > b[0]) {
-                        v = varnames[i];
-                        ds = b[1] - b[0];
-                    }
-                }
-                return v;
-            }
-
-            var branch_sequence = {
-                branch: function (S) {
-                    var state, v, dom;
-                    if (!S.__branch_state) {
-                        v = var_with_smallest_domain();
-                        if (v) {
-                            dom = S.vars[v].dom;
-                            state = S.__branch_state = {
-                                var: v,
-                                dom: dom,
-                                i: 0,
-                                val: dom[0][0]
-                            };
-                            if (varnames.length > 1) {
-                                Distribute.fail_first(S, varnames.filter(function (n) { return n !== v; }));
-                            }
-                        } else {
-                            return null;
-                        }
-                    } else {
-                        state = S.__branch_state;
-                        v = state.var;
-                        dom = state.dom;
-                    }
-
-                    if (state.val > dom[state.i][1]) {
-                        state.i++;
-                        if (state.i >= dom.length) {
-                            return null;
-                        } else {
-                            state.val = dom[state.i][0];
-                        }
-                    }
-
-                    var Sc = S.clone();
-                    var vc = Sc.vars[state.var];
-                    vc.set_dom([[state.val, state.val]]);
-                    state.val++;
-                    return Sc;
-                }
-            };
-
-            S.brancher.enqueue(branch_sequence);
-            return S;
+            return vs;
         }
     };
 
+    Distribute.generic.orderings = {
+        naive: function (S, v1, v2) {
+            return true;
+        },
+
+        size: function (S, v1, v2) {
+            return S.vars[v1].size() < S.vars[v2].size();
+        },
+
+        min: function (S, v1, v2) {
+            return S.vars[v1].min() < S.vars[v2].min();
+        },
+
+        max: function (S, v1, v2) {
+            return S.vars[v1].max() > S.vars[v2].max();
+        }
+    };
+
+    // The interface contract for "values" functions is that
+    // they take a variable name and return a function that will
+    // impose a sequence of choices on the variable into a given
+    // space. The returned function (S, n) will commit the given
+    // space S to a choice for the originally specified variable.
+    // The returned function's "numChoices" property tells you
+    // how many choices are available, and the choices are numbered
+    // from 0 to numChoices-1.
+    //
+    // Note that this change of interface has resulted in a noticeable
+    // performance degradation. My guess is that the degradation is due
+    // to the computations outside the switch blocks having to execute
+    // for every choice, whereas in the earlier implementation there
+    // were only executed once per space.
+    Distribute.generic.values = {
+
+        // Picks the smallest value in the domain first.
+        min: function (v) {
+            function options(S, n) {
+                var vS = S.vars[v];
+                var d = vS.min();
+                switch (n) {
+                    case 0: 
+                        vS.constrain([[d, d]]);
+                        return S;
+                    case 1: 
+                        vS.constrain([[d+1, vS.max()]]);
+                        return S;
+                    default: 
+                        throw new Error("Invalid choice");
+                }
+            }
+
+            options.numChoices = 2;
+            return options;
+        },
+
+        // Picks the largest value in the domain first.
+        max: function (v) {
+            function options(S, n) {
+                var vS = S.vars[v];
+                var d = vS.max();
+                switch (n) {
+                    case 0:
+                        vS.constrain([[d, d]]);
+                        return S;
+                    case 1:
+                        vS.constrain([[vS.min(), d-1]]);
+                        return S;
+                    default:
+                        throw new Error("Invalid choice");
+                }
+            }
+
+            options.numChoices = 2;
+            return options;
+        },
+
+        // Picks the middle value in the domain first.
+        mid: function (v) {
+            function options(S, n) {
+                var fv = S.vars[v];
+                var d = fv.mid();
+                if (n === 0) {
+                    fv.constrain([[d, d]]);
+                    return S;
+                } else if (n === 1) {
+                    if (d > fv.min()) {
+                        fv.constrain([[fv.min(), d-1], [d+1, fv.max()]]);
+                        return S;
+                    } else {
+                        fv.constrain([[d+1, fv.max()]]);
+                        return S;
+                    }
+                } else {
+                    throw new Error("Invalid choice");
+                }
+            }
+
+            options.numChoices = 2;
+            return options;
+        },
+
+        // splits the domain roughly down the middle, trying the
+        // lower values first.
+        splitMin: function (v) {
+            function options(S, n) {
+                var vS = S.vars[v];
+                var d = vS.dom;
+                var m = (d[0][0] + d[d.length - 1][1]) >> 1;
+                switch (n) {
+                    case 0:
+                        vS.constrain([[d[0][0], m]]);
+                        return S;
+                    case 1: 
+                        vS.constrain([[m+1, d[d.length - 1][1]]]);
+                        return S;
+                    default:
+                        throw new Error("Invalid choice");
+                }
+            }
+
+            options.numChoices = 2;
+            return options;
+        },
+
+        // splits the domain roughly down the middle, trying the
+        // higher values first.
+        splitMax: function (v) {
+            function options(S, n) {
+                var vS = S.vars[v];
+                var d = vS.dom;
+                var m = (d[0][0] + d[d.length - 1][1]) >> 1;
+                switch (n) {
+                    case 0:
+                        vS.constrain([[m+1, d[d.length - 1][1]]]);
+                        return S;
+                    case 1:
+                        vS.constrain([[d[0][0], m]]);
+                        return S;
+                    default:
+                        throw new Error("Invalid choice");
+                }
+            }
+
+            options.numChoices = 2;
+            return options;
+        }
+    };
+
+    // The native distribution strategy simply steps through all
+    // undetermined variables.
+    Distribute.naive = (function () {
+        var spec = {
+            filter: 'undet',
+            ordering: 'naive',
+            value: 'min'
+        };
+
+        return function (S, varnames) {
+            return Distribute.generic(S, varnames, spec);
+        };
+    }());
+
+    // The "fail first" strategy branches on the variable with the
+    // smallest domain size.
+    Distribute.fail_first = (function () {
+        var spec = {
+            filter: 'undet',
+            ordering: 'size',
+            value: 'min'
+        };
+
+        return function (S, varnames) {
+            return Distribute.generic(S, varnames, spec);
+        };
+    }());
+
+    // The "domain splitting" strategy where each domain is roughly
+    // halved in each step. The 'varname' argument can be either a
+    // single fdvar name or an array of names or an object whose
+    // values are fdvar names.
+    Distribute.split = (function () {
+        var spec = {
+            filter: 'undet',
+            ordering: 'size',
+            value: 'splitMin'
+        };
+
+        return function (S, varnames) {
+            return Distribute.generic(S, varnames, spec);
+        };
+    }());
+            
     // Search using the branchers.
     var Search = {};
+
+    // A "class function" for making "is_solved" testers
+    // for use during search.
+    Search.solve_for_variables = function (varnames) {
+        if (varnames) {
+            return function (S) {
+                var i, N, v;
+                for (i = 0, N = varnames.length; i < N; ++i) {
+                    v = S.vars[varnames[i]];
+                    if (v.dom.length === 1) {
+                        if (v.dom[0][0] !== v.dom[0][1]) {
+                            return false;
+                        } else {
+                            // Singleton domain
+                        }
+                    } else {
+                        return false;
+                    }
+                }
+                return true;
+            };
+        } else {
+            return function (S) { 
+                return S.is_solved(); 
+            };
+        }
+    };
+
+    Search.solve_for_propagators = function (S) {
+        var i, N, p;
+        for (i = 0, N = S._propagators.length; i < N; ++i) {
+            if (!propagator_is_solved(S, S._propagators[i])) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    // A simple mechanism for branching down a search tree where the
+    // choice points function and info about the number of choices
+    // are both stored in the space itself. This doesn't have to be
+    // the case, however, and you can roll your own strategy and
+    // pass it in the "state.next_choice" field.
+    //
+    // This implementation stores information that is local to
+    // a space in the space itself. That doesn't have to be the
+    // case and the whole search state is passed in which you
+    // can make use of for tracking purposes. For example, you can 
+    // have a stack of choice functions that you can use to recompute
+    // a space at any depth by starting from the root and applying
+    // the options in sequence to a clone of the root space. 
+    //
+    // The implementation below suffices for the depth_first and
+    // branch_and_bound search strategies.
+    function next_choice(space, state) {
+        if (!space.commit) {
+            // Note that the branch call is made only once, irrespective
+            // of how many children this space might generate. The branch
+            // call now returns a choice function that constrains a chosen
+            // variable to a domain indexed by a choice number.
+            space.commit = space.brancher.branch();
+            if (space.commit) {
+                space.commit.nextChoice = 0;
+            }
+        }
+
+        if (space.commit && space.commit.nextChoice < space.commit.numChoices) {
+            // Clone the given space and commit it to the next available choice.
+            // Returned the commited cloned space.
+            return space.commit(space.clone(), space.commit.nextChoice++);
+        } else {
+            return null;
+        }
+    }
 
     // Depth first search.
     // state.space must be the starting space. The object is used to store and 
@@ -1128,12 +1711,26 @@ var FD = (function (exports, Math) {
     Search.depth_first = function (state) {
         var space = state.space;
         var stack = state.stack;
-        var brancher, next_space;
+        var brancher, next_space, choose_next_space;
 
         // If no stack argument, then search begins with this space.
         if (!stack || stack.length === 0) {
             stack = state.stack = [space];
         }
+
+        if (!state.is_solved) {
+            // Set the default "solved" condition to be "all variables".
+            state.is_solved = Search.solve_for_variables();
+        }
+
+        if (!state.next_choice) {
+            // Set the default branch generator to the next_choice
+            // function, which is a simple implementation of generating
+            // branches from index 0 to N-1.
+            state.next_choice = next_choice;
+        }
+
+        choose_next_space = state.next_choice;
 
         while (stack.length > 0) {
             space = stack[stack.length - 1];
@@ -1143,7 +1740,9 @@ var FD = (function (exports, Math) {
                 // this becomes a failed space.
                 space.propagate();
 
-                if (space.is_solved()) {
+                if (state.is_solved(space)) {
+                    space.succeeded_children++;
+                    space.done();
                     stack.pop();
                     state.status = 'solved';
                     state.space = space;
@@ -1156,13 +1755,15 @@ var FD = (function (exports, Math) {
 
                 // Call up the next brancher and fork the space
                 // according to what it says.
-                next_space = space.brancher.branch();
+                next_space = choose_next_space(space, state);
                 if (next_space) {
                     // Push on to the stack and explore further.
                     stack.push(next_space);
                 } else {
                     // Finished exploring branches of this space. Continue with the previous spaces.
                     // This is a stable space, but isn't a solution. Neither is it a failed space.
+                    space.stable_children++;
+                    space.done();
                     stack.pop();
                     state.more = stack.length > 0;
                 }
@@ -1170,6 +1771,7 @@ var FD = (function (exports, Math) {
                 // Some propagators failed so this is now a failed space and we need
                 // to pop the stack and continue from above. This is a failed space.
                 space.failed = true;
+                space.done();
                 stack.pop();
             }
         }
@@ -1179,6 +1781,181 @@ var FD = (function (exports, Math) {
         state.more = false;
         return state;
     };
+
+    // Branch and bound search
+    // WARNING: Untested!
+    // TODO: Test this function and once the tests pass, remove the above warning.
+    //
+    // Finds the "best" solution according to the given ordering function.
+    // The `state` parameter is similar to the `depth_first` search function.
+    // It is expected to be an object such that `state.space` gives the space
+    // from which to search for the best solution.
+    //
+    // The `state` is also what is returned by `branch_and_bound` and `state.space`
+    // will be the space with the best solution found during the search. When a
+    // solution exists, `state.status` will be the string "solved".
+    //
+    // The `ordering` argument is expected to be a function of the form
+    //       function (space, a_solution) { ... }
+    // where the `space` argument is the space into which the ordering function
+    // should inject the new constraints for the ordering, and `a_solution` is
+    // an object whose keys are root finite domain variable names and whose
+    // values are the solved values of those variables. The return value of
+    // the ordering function is irrelevant.
+    //
+    // There are two ways to use the branch_and_bound function -
+    //    1. In one shot mode where a single call will give you the best
+    //       solution that it can find, if a solution exists at all.
+    //
+    //    2. In "single step" mode, indicated by setting `state.single_step` to `true`.
+    //       In this mode, the function will return whenever it finds a solved space
+    //       and `state.more` will indicate whether there may be any more solutions
+    //       to look at. In this mode, every call will result in a solution that is
+    //       "better" than the one found before it, due to the `ordering` function.
+    //
+    //       Note that if `state.more` is `false`, then definitely there are no
+    //       more solutions to look at, but if it is `true`, there *may* be more
+    //       solutions to look at. If a subsequent search turns up empty, it is
+    //       indicated by `state.status` being set to the string "end".
+    //
+    Search.branch_and_bound = function (state, ordering) {
+        var space = state.space;
+        var stack = state.stack;
+        var brancher, next_space, choose_next_space;
+        var bestSolution = state.best;
+
+        if (state.error) {
+            // If a search tree state with an error is passed in,
+            // we throw up immediately.
+            throw state;
+        }
+
+        // If no stack argument, then search begins with this space.
+        if (!stack || stack.length === 0) {
+            stack = state.stack = [space];
+        }
+
+        if (!state.is_solved) {
+            // Set the default "solved" condition to be "all variables".
+            state.is_solved = Search.solve_for_variables();
+        }
+
+        if (!state.next_choice) {
+            // Set the default branch generator to the next_choice
+            // function, which is a simple implementation of generating
+            // branches from index 0 to N-1.
+            state.next_choice = next_choice;
+        }
+
+        choose_next_space = state.next_choice;
+
+        while (stack.length > 0) {
+            space = stack[stack.length - 1];
+
+            try {
+                // Wait for stability. Could throw a 'fail', in which case
+                // this becomes a failed space.
+                space.propagate();
+
+                if (state.is_solved(space)) {
+                    space.succeeded_children++;
+                    space.done();
+                    stack.pop();
+                    state.status = 'solved';
+                    state.space = space;
+                    state.more = stack.length > 0;
+
+                    // This space is now our "current best solution"
+                    state.best = bestSolution = space;
+
+                    // We now try to find something better based on the given
+                    // ordering.
+                    if (state.more) {
+                        next_space = choose_next_space(stack[stack.length - 1], state);
+                        while (!next_space && stack.length > 0) {
+                            stack[stack.length - 1].done();
+                            stack.pop();
+                            if (stack.length > 0) {
+                                next_space = choose_next_space(stack[stack.length - 1], state);
+                            } else {
+                                break;
+                            }
+                        }
+                        if (next_space) {
+                            // Constrain the search to be better than our current best solution.
+                            ordering(next_space, bestSolution.solution());
+                            state.needs_constraining = false;
+                            stack.push(next_space);
+
+                            // Continue the search. If we've been asked to
+                            // single step, then just return the current state.
+                            // the stack is already prepared so that the next call
+                            // will initiate a search for a solution that is better
+                            // than the one in state.space.
+                            if (state.single_step) {
+                                return state;
+                            } else {
+                                continue;
+                            }
+                        } else {
+                            // No more spaces to explore. We've already found
+                            // the best solution that we can find in this tree.
+                            state.more = false;
+                        }
+                    } 
+
+                    // We have no more branches to explore.
+                    // Return the best solution found so far.
+                    return state;
+                }
+
+                // Now this space is neither solved nor failed,
+                // therefore it is stable. (WARNING: Is this correct?)
+
+                // Call up the next brancher and fork the space
+                // according to what it says.
+                next_space = choose_next_space(space, state);
+                if (next_space) {
+                    // Push on to the stack and explore further.
+                    if (state.needs_constraining && bestSolution) {
+                        ordering(next_space, bestSolution.solution());
+                    }
+                    state.needs_constraining = false;
+                    stack.push(next_space);
+                } else {
+                    // Finished exploring branches of this space. Continue with the previous spaces.
+                    // This is a stable space, but isn't a solution. Neither is it a failed space.
+                    //
+                    // TODO: Ideally, this condition should never occur and if it does, it is 
+                    // likely to be an error in the problem specification. Maybe I should
+                    // throw up here?
+                    space.stable_children++;
+                    space.done();
+                    stack.pop();
+                    state.more = stack.length > 0;
+                    state.needs_constraining = true;
+                }
+            } catch (e) {
+                // Some propagators failed so this is now a failed space and we need
+                // to pop the stack and continue from above. This is a failed space.
+                space.failed = true;
+                space.done();
+                stack.pop();
+                state.more = stack.length > 0;
+                state.needs_constraining = true;
+            }
+        }
+
+        // Failed space and no more options to explore.
+        state.status = (bestSolution ? 'solved' : 'end');
+        state.more = false;
+
+        // Note that state.space already contains the last - i.e. the "best" solution,
+        // If the original space passed to branch_and_bound actually has no solution,
+        // then state.space.failed will be true.
+        return state;
+    };
+
 
     exports.SUP = FD_SUP;
     exports.INF = 0;
