@@ -1,7 +1,5 @@
 // Copyright (c) 2011, Srikumar K. S. (srikumarks@gmail.com)
-// All rights reserved.
-//
-// Redistribution license: BSD (http://www.opensource.org/licenses/bsd-license.php)
+// License: New BSD (http://www.opensource.org/licenses/bsd-license.php)
 //
 // Module: FD
 // Status: Work (very much) in progress
