@@ -27,13 +27,7 @@
 //    FD.search.depth_first
 //
 
-// NOTE: The fd.js module needs to be loaded prior to
-// loading this file.
-try {
-    FD.space;
-} catch (e) {
-    alert("fd.js module needs to be loaded before fd-tests.js");
-}
+package('com.nishabdam.FD_tests', ['.FD'], function (FD) {
 
 (function () {
 
@@ -731,3 +725,5 @@ try {
     run_tests();
 
 })();
+
+});
