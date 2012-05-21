@@ -26,6 +26,8 @@
 // Namespace FD.search has the following search algo -
 //    FD.search.depth_first
 //
+package('com.nishabdam.FD', function () {
+
 var FD = (function (exports, Math) {
 
     var FD_SUP = 100000000;
@@ -1964,8 +1966,6 @@ var FD = (function (exports, Math) {
     return exports;
 })({}, Math);
 
-try {
-    module.exports = FD;
-} catch (e) {
-    // Not in node.js. Likely loaded as FD in a browser.
-}
+return FD;
+
+});
