@@ -25,6 +25,13 @@ Here are some cool student projects built using FD.js -
 * [Mozart/Oz]
 * [Gecode]
 
+#### Acknowledgement
+
+Thanks to Dr. [Martin Henz] for his excellent introduction to finite domain 
+constriant programming with [Mozart/Oz] which inspired this library.
+
+[Martin Henz]: http://www.comp.nus.edu.sg/~henz/
+
 #### License
 
 All source code part of the `fd.js` project is licensed under the permissive [New BSD license].
