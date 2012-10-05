@@ -18,7 +18,7 @@ Here are some cool student projects built using FD.js -
 [Search tree visualization]: http://minhtule.github.com/Search-Tree-Visualization/
 [CompOzeJS]: http://zichun.github.com/CompOZeJS/
 [RoCoCo]: http://sozos.github.com/RoCoCo/
-[Nonogram solver]: https://github.com/rgoulter/Nonogram-Propogation
+[Nonogram solver]: https://github.com/rgoulter/Nonogram-Propagation-JS
 
 #### Related links
 
