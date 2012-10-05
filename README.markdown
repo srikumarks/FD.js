@@ -6,7 +6,19 @@ and search strategy through the use of "computation spaces".
 #### Status
 
 Work *very much* in progress, but the library is already useful enough to solve
-simple puzzles.
+simple puzzles. 
+
+Here are some cool student projects built using FD.js -
+
+* [Search tree visualization]
+* [CompOzeJS]
+* [RoCoCo] - Sports tournament scheduling
+* [Nonogram solver]
+
+[Search tree visualization]: http://minhtule.github.com/Search-Tree-Visualization/
+[CompOzeJS]: http://zichun.github.com/CompOZeJS/
+[RoCoCo]: http://sozos.github.com/RoCoCo/
+[Nonogram solver]: https://github.com/rgoulter/Nonogram-Propogation
 
 #### Related links
 
