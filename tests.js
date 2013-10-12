@@ -670,7 +670,9 @@ try {
     var run_tests = (function () {
         var display = {};
         display.__proto__ = (document || console);
-        display.show = (document && document.write) || console.log;
+        display.show = ((document && document.write) 
+                        ? (function () { return document.write.apply(document, arguments);  })
+                        : (function () { return console.log.apply(console, arguments); }));
 
         var strings = {
             correct: '<span style="color:green">CORRECT</span>',
