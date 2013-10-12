@@ -365,7 +365,37 @@ try {
         description: 'The famous <a href="http://www.stanford.edu/~laurik/fsmbook/examples/Einstein\'sPuzzle.html">Einstein puzzle</a>',
         search: FD.search.depth_first,
         verify: function (sol) {
-            return true; // cheat!
+            var root = [
+                ['Englishman', 'Swede', 'Dane', 'Norwegian', 'German'],
+                ['Cats', 'Dogs', 'Birds', 'Horses', 'Fish'],
+                ['Bier', 'Coffee', 'Tea', 'Milk', 'Water'],
+                ['PallMall', 'Dunhills', 'Blend', 'BlueMasters', 'Prince'],
+                ['BlueHouse', 'RedHouse', 'GreenHouse', 'WhiteHouse', 'YellowHouse']
+                ];
+            function are_distinct(arr) {
+                return verify_distinct(arr.map(function (name) { return sol[name]; }));
+            }
+
+            root[0].forEach(function (man) {
+                if (sol[man] == sol.Fish) {
+                    display.show(man + ' keeps Fish');
+                }
+            });
+
+            return (root.map(are_distinct).reduce(function (acc, b) { return acc && b; }, true)
+                    && (sol.Englishman == sol.RedHouse)
+                    && (sol.Swede == sol.Dogs)
+                    && (sol.Dane == sol.Tea)
+                    && (sol.WhiteHouse == sol.GreenHouse + 1)
+                    && (sol.PallMall == sol.Birds)
+                    && (sol.Milk == 3)
+                    && (sol.Norwegian == 1)
+                    && (sol.Blend + 1 == sol.Cats || sol.Cats + 1 == sol.Blend)
+                    && (sol.BlueMasters == sol.Bier)
+                    && (sol.Horses + 1 == sol.Dunhills || sol.Dunhills + 1 == sol.Horses)
+                    && (sol.German == sol.Prince)
+                    && (sol.Norwegian + 1 == sol.BlueHouse || sol.BlueHouse + 1 == sol.Norwegian)
+                    && (sol.Blend + 1 == sol.Water || sol.Water + 1 == sol.Blend));
         },
         script: function (S) {
             var root = [
@@ -719,6 +749,7 @@ try {
         display.show = ((document && document.write) 
                         ? (function () { return document.write.apply(document, arguments);  })
                         : (function () { return console.log.apply(console, arguments); }));
+        this.display = display;
 
         var strings = {
             correct: '<span style="color:green">CORRECT</span>',
