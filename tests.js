@@ -361,6 +361,52 @@ try {
             return S;
         }
     },
+    {   name: 'test_einstein',
+        description: 'The famous <a href="http://www.stanford.edu/~laurik/fsmbook/examples/Einstein\'sPuzzle.html">Einstein puzzle</a>',
+        search: FD.search.depth_first,
+        verify: function (sol) {
+            return true; // cheat!
+        },
+        script: function (S) {
+            var root = [
+                ['Englishman', 'Swede', 'Dane', 'Norwegian', 'German'],
+                ['Cats', 'Dogs', 'Birds', 'Horses', 'Fish'],
+                ['Bier', 'Coffee', 'Tea', 'Milk', 'Water'],
+                ['PallMall', 'Dunhills', 'Blend', 'BlueMasters', 'Prince'],
+                ['BlueHouse', 'RedHouse', 'GreenHouse', 'WhiteHouse', 'YellowHouse']
+                ];
+            var allvars = Array.prototype.concat.apply([], root);
+            S.decl(allvars, [[1,5]]);
+            root.forEach(function (array) { S.distinct(array); });
+
+            var one = S.const(1);
+            function nextTo(a,b) {
+                // a nextTo b is modeled as
+                // a + 1 == b or b + 1 == a
+                // Reifying both conditions to boolean values C1 and C2, the "or"
+                // can be expressed as C1 + C2 == 1
+                return S.plus(S.reified('eq', [S.plus(b, one), a]), S.reified('eq', [S.plus(a, one), b]), one);
+            }
+            S.eq('Englishman', 'RedHouse');
+            S.eq('Swede', 'Dogs');
+            S.eq('Dane', 'Tea');
+            S.eq('WhiteHouse', S.plus('GreenHouse', one));
+            S.eq('GreenHouse', 'Coffee');
+            S.eq('PallMall', 'Birds');
+            S.eq('YellowHouse', 'Dunhills');
+            S.eq('Milk', S.const(3));
+            S.eq('Norwegian', one);
+            nextTo('Blend', 'Cats');
+            S.eq('BlueMasters', 'Bier');
+            nextTo('Horses', 'Dunhills');
+            S.eq('German', 'Prince');
+            nextTo('Norwegian', 'BlueHouse');
+            nextTo('Blend', 'Water');
+
+            FD.distribute.fail_first(S, allvars);
+            return S;
+        }
+    },
     {   name: 'test_sudoku',
         description: "A <a href=\"http://en.wikipedia.org/wiki/Sudoku\">simple</a> Sudoku board",
         search: FD.search.depth_first,
