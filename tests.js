@@ -769,7 +769,8 @@ try {
         }
 
         return function () {
-            tests.forEach(function (test) { 
+            var tests_copy = tests.slice(0);
+            function dotest(test) { 
                 if (test.do_not_run || !test.script) {
                     return;
                 }
@@ -802,7 +803,18 @@ try {
                             (S.succeeded_children + S.failed_children + S.stable_children) + '</p>');
                     display.show('<hr/>');
                 }
-            });
+            }
+
+            function dotests() {
+                if (tests_copy.length > 0) {
+                    dotest(tests_copy.shift());
+                    window.scrollTo(0,document.body.scrollHeight);
+                    setTimeout(dotests, 0);
+                }
+            }
+
+            dotests();
+
         };
     })();
 
