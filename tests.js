@@ -377,25 +377,25 @@ try {
             }
 
             root[0].forEach(function (man) {
-                if (sol[man] == sol.Fish) {
+                if (sol[man] === sol.Fish) {
                     display.show(man + ' keeps Fish');
                 }
             });
 
             return (root.map(are_distinct).reduce(function (acc, b) { return acc && b; }, true)
-                    && (sol.Englishman == sol.RedHouse)
-                    && (sol.Swede == sol.Dogs)
-                    && (sol.Dane == sol.Tea)
-                    && (sol.WhiteHouse == sol.GreenHouse + 1)
-                    && (sol.PallMall == sol.Birds)
-                    && (sol.Milk == 3)
-                    && (sol.Norwegian == 1)
-                    && (sol.Blend + 1 == sol.Cats || sol.Cats + 1 == sol.Blend)
-                    && (sol.BlueMasters == sol.Bier)
-                    && (sol.Horses + 1 == sol.Dunhills || sol.Dunhills + 1 == sol.Horses)
-                    && (sol.German == sol.Prince)
-                    && (sol.Norwegian + 1 == sol.BlueHouse || sol.BlueHouse + 1 == sol.Norwegian)
-                    && (sol.Blend + 1 == sol.Water || sol.Water + 1 == sol.Blend));
+                    && (sol.Englishman === sol.RedHouse)
+                    && (sol.Swede === sol.Dogs)
+                    && (sol.Dane === sol.Tea)
+                    && (sol.WhiteHouse === sol.GreenHouse + 1)
+                    && (sol.PallMall === sol.Birds)
+                    && (sol.Milk === 3)
+                    && (sol.Norwegian === 1)
+                    && (sol.Blend + 1 === sol.Cats || sol.Cats + 1 === sol.Blend)
+                    && (sol.BlueMasters === sol.Bier)
+                    && (sol.Horses + 1 === sol.Dunhills || sol.Dunhills + 1 === sol.Horses)
+                    && (sol.German === sol.Prince)
+                    && (sol.Norwegian + 1 === sol.BlueHouse || sol.BlueHouse + 1 === sol.Norwegian)
+                    && (sol.Blend + 1 === sol.Water || sol.Water + 1 === sol.Blend));
         },
         script: function (S) {
             var root = [
@@ -407,7 +407,7 @@ try {
                 ];
             var allvars = Array.prototype.concat.apply([], root);
             S.decl(allvars, [[1,5]]);
-            root.forEach(function (array) { S.distinct(array); });
+            root.forEach(S.distinct);
 
             var one = S.const(1);
             function nextTo(a,b) {
