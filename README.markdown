@@ -85,7 +85,7 @@ Returns S.
 Creates new temporary or intermediate fd variables whose names you don't want
 to bother with. Returns the name of the temporary variable.  
 
-##### S.const(n)
+##### S.konst(n)
 
 Currently shorthand for `S.temp([[n, n]])`. Might be optimized in the future.
 

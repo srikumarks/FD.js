@@ -409,7 +409,7 @@ try {
             S.decl(allvars, [[1,5]]);
             root.forEach(function (varset) { S.distinct(varset); });
 
-            var one = S.const(1);
+            var one = S.konst(1);
             function nextTo(a,b) {
                 // a nextTo b is modeled as
                 // a + 1 == b or b + 1 == a
@@ -424,7 +424,7 @@ try {
             S.eq('GreenHouse', 'Coffee');
             S.eq('PallMall', 'Birds');
             S.eq('YellowHouse', 'Dunhills');
-            S.eq('Milk', S.const(3));
+            S.eq('Milk', S.konst(3));
             S.eq('Norwegian', one);
             nextTo('Blend', 'Cats');
             S.eq('BlueMasters', 'Bier');
@@ -579,7 +579,7 @@ try {
             search: (function () {
 
                 function ordering(S, solution) {
-                    S.gt('Z', S.const(solution.Z));
+                    S.gt('Z', S.konst(solution.Z));
                 }
 
                 return function (state) {
@@ -631,7 +631,7 @@ try {
             search: (function () {
 
                 function ordering(S, solution) {
-                    S.gt('Satisfaction', S.const(solution.Satisfaction));
+                    S.gt('Satisfaction', S.konst(solution.Satisfaction));
                 }
 
                 return function (state) {
@@ -644,8 +644,8 @@ try {
                 };
             })(),
             script: function (S) {
-                var one = S.const(1);
-                var zero = S.const(0);
+                var one = S.konst(1);
+                var zero = S.konst(0);
 
                 function satisfied(p) {
                     var a = S.reified('eq', [S.plus(p[0], one), p[1]]);
@@ -729,7 +729,7 @@ try {
 
                    for (i = 0; i < N; ++i) {
                        for (j = 0; j < i; ++j) {
-                           k = S.const(i-j);
+                           k = S.konst(i-j);
                            S.neq(S.plus(root[j], k), root[i]);
                            S.neq(S.plus(root[i], k), root[j]);
                        }

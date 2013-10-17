@@ -520,13 +520,19 @@ var FD = (function (exports, Math) {
     // Create a "constant". We have no optimizing support for
     // constants at the moment and just treat it as a temp FDVar
     // whose domain is of size = 1.
-    Space.prototype.const = function (val) {
+    //
+    // Fixing issue #1 - 'const' in the property position is not
+    // accepted by the IE8 parser. It is likely to be rejected by
+    // the closure compiler too. So I'm changing the name to 'konst' 
+    // instead. I'll keep the old name 'const' for compatibility.
+    Space.prototype.konst = function (val) {
         if (val < 0 || val > FD_SUP) {
-            throw "FD.space.const: Value out of valid range";
+            throw "FD.space.konst: Value out of valid range";
         }
 
         return this.temp([[val, val]]);
     };
+    Space.prototype['const'] = Space.prototype.konst; // Keep old name for compatibility.
 
     function FDVar(dom, step) {
         this.dom = dom || [[0, FD_SUP]];
