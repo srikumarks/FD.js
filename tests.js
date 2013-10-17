@@ -407,7 +407,7 @@ try {
                 ];
             var allvars = Array.prototype.concat.apply([], root);
             S.decl(allvars, [[1,5]]);
-            root.forEach(S.distinct);
+            root.forEach(function (varset) { S.distinct(varset); });
 
             var one = S.const(1);
             function nextTo(a,b) {
