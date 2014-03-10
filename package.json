@@ -1,6 +1,6 @@
 {
   "name": "fdjs",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Finite Domain Constrain Solver",
   "main": "fd.js",
   "scripts": {
