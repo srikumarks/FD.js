@@ -1,0 +1,22 @@
+{
+  "name": "fdjs",
+  "version": "0.0.0",
+  "description": "Finite Domain Constrain Solver",
+  "main": "fd.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/srikumarks/FD.js.git"
+  },
+  "keywords": [
+    "constraint"
+  ],
+  "author": "Srikumar",
+  "license": "BSD",
+  "bugs": {
+    "url": "https://github.com/srikumarks/FD.js/issues"
+  },
+  "homepage": "https://github.com/srikumarks/FD.js"
+}
