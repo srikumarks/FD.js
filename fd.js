@@ -175,9 +175,11 @@ var FD = (function (exports, Math) {
         return true;
     }
 
-    // The complement of a domain is such that domain U domain' = [[0, FD_SUP]].
+    // The complement of a domain is such that domain U domain' = [[0, FD_SUP]],
+    // and domain INTERSECTION domain' = [] (empty domain).
     function domain_complement(d) {
         if (d.length === 0) {
+            // Complement of the empty domain is the whole set.
             return [[0, FD_SUP]];
         } else {
             var end = 0;
@@ -187,7 +189,7 @@ var FD = (function (exports, Math) {
                 if (end < d[i][0]) {
                     result.push([end, d[i][0] - 1]);
                 }
-                end = d[0][1] + 1;
+                end = d[i][1] + 1;
             }
             if (end < FD_SUP) {
                 result.push([end, FD_SUP]);
