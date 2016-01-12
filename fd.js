@@ -890,7 +890,11 @@ var FD = (function (exports, Math) {
 
     // Greater than propagator.
     Space.prototype.gt = function (v1name, v2name) {
-        return this.lte(v2name, v1name);
+        // Note that a > b is the same condition as b < a.
+        // I got confused once that this swapping meant I must
+        // replace a > b with b <= a instead. Writing out
+        // this comment makes the logical error obvious :)
+        return this.lt(v2name, v1name);
     };
 
     // Less than or equal to propagator.
@@ -945,7 +949,11 @@ var FD = (function (exports, Math) {
 
     // Greater than or equal to.
     Space.prototype.gte = function (v1name, v2name) {
-        return this.lt(v2name, v1name);
+        // Note that a >= b is the same condition as b <= a.
+        // I got confused once that this swapping meant I must
+        // replace a >= b with b < a instead. Writing out
+        // this comment makes the logical error obvious :)
+        return this.lte(v2name, v1name);
     };
 
     // Ensures that the two variables take on different values.

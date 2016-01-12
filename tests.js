@@ -238,7 +238,37 @@ try {
             return S.decl(['X', 'Y', 'Z'], [[0, 10]]).decl('W').sum(['X', 'Y', 'Z'], 'W').lt('X', 'Y');
         }
     },
-    {   name: 'test_naive',
+    {   name: 'test_gt',
+        description: "Ensures that a &gt; b is the same condition as b &lt; a",
+        search: FD.search.depth_first,
+        verify: function (sol) {
+            return sol.X == 5 && sol.Y == 4;
+        },
+        script: function (S) {
+            S.decl('X', [[1,5]]);
+            S.decl('Y', [[4,10]]);
+            S.gt('X','Y');
+            S.lt('Y','X');
+            FD.distribute.naive(S, ['X', 'Y']);
+            return S;
+        }
+    },
+    {   name: 'test_gte',
+        description: "Ensures that a &gt;= b is the same condition as b &lt;= a",
+        search: FD.search.depth_first,
+        verify: function (sol) {
+            return sol.X >= sol.Y;
+        },
+        script: function (S) {
+            S.decl('X', [[1,5]]);
+            S.decl('Y', [[4,10]]);
+            S.gte('X','Y');
+            S.lte('Y','X');
+            FD.distribute.naive(S, ['X', 'Y']);
+            return S;
+        }
+    },
+   {   name: 'test_naive',
         description: "Simple test of naive distribution",
         search: FD.search.depth_first,
         verify: function (sol) {
@@ -777,6 +807,8 @@ try {
 
                 // Default to depth_first search if unspecified.
                 test.search = test.search || FD.search.depth_first;
+
+                console.log(test.name);
 
                 var S = test.script(new FD.space());
                 if (S) {
