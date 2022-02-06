@@ -1358,6 +1358,17 @@ var FD = (function (exports, Math) {
         return simplify_domain(p);
     }
 
+    function idiv_floor(a, b) {
+        //return a / b;
+        return (a  - a % b) / b;
+    }
+
+    function idiv_ceil(a, b) {
+        let m = a % b;
+        if (m == 0) { return a / b; }
+        return (a + b - m) / b;
+    }
+
     // Note that this isn't domain consistent.
     function dom_divby(d1, d2) {
         var i, j, len1, len2, i1, i2, p = [], lo, hi;
@@ -1366,8 +1377,8 @@ var FD = (function (exports, Math) {
             for (j = 0; j < len2; ++j) {
                 i2 = d2[j];
                 if (i2[1] > 0) {
-                    lo = i1[0] / i2[1];
-                    hi = (i2[0] > 0 ? (i1[1] / i2[0]) : FD_SUP);
+                    lo = idiv_floor(i1[0], i2[1]);
+                    hi = (i2[0] > 0 ? idiv_floor(i1[1], i2[0]) : FD_SUP);
                     if (hi >= 0) {
                         p.push([(lo < 0 ? 0 : lo), hi]);
                     }
